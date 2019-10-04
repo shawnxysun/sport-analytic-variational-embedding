@@ -58,12 +58,13 @@ def write_Q_data_txt(fileWriter, Q_values, state_features, action_index):
                     
                     state_feature_value = state_features[batch_index][history_index][feature_index]
 
-                    # check if it is action and change action to one-hot
-                    if feature_index >= 12: 
-                        if state_features[batch_index][history_index][feature_index] > 0:
-                            state_feature_value = 1
-                        else:
-                            state_feature_value = 0
+                    # action is no longer normalized
+                    # # check if it is action and change action to one-hot
+                    # if feature_index >= 12: 
+                    #     if state_features[batch_index][history_index][feature_index] > 0:
+                    #         state_feature_value = 1
+                    #     else:
+                    #         state_feature_value = 0
 
                     state_feature = state_feature + str(state_feature_value).strip() + ','
 
