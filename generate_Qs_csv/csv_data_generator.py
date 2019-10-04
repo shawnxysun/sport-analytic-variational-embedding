@@ -86,7 +86,13 @@ def generate(sess, model, fileWriter, action_index):
         if 'DS_Store' in dir_game or "feature_var" in dir_game or "feature_mean" in dir_game:
             continue
 
+        print("\n loadeding files in folder " + str(dir_game) + '...')
+
         # find data file names
+        reward_name = None
+        state_input_name = None
+        action_input_name = None
+        state_trace_length_name = None
         game_files = os.listdir(DATA_STORE + "/" + dir_game)
         for filename in game_files:
             if "reward" in filename:
@@ -94,10 +100,14 @@ def generate(sess, model, fileWriter, action_index):
             elif "state_feature_seq" in filename:
                 state_input_name = filename
             elif "action_feature_seq" in filename:
-                    action_input_name = filename
+                action_input_name = filename
             elif "lt" in filename:
                 state_trace_length_name = filename
 
+        if reward_name is None or state_input_name is None or action_input_name is None or state_trace_length_name is None:
+            print("\n skip folder " + str(dir_game) + ' because of missing files')
+            continue
+        
         reward = sio.loadmat(DATA_STORE + "/" + dir_game + "/" + reward_name)
         reward = reward['reward'][0]
 
