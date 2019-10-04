@@ -83,7 +83,7 @@ def generate(sess, model, fileWriter, action_index):
     for dir_game in DIR_GAMES_ALL:
 
         # skip the hidden mac file, feature_var.txt and feature_mean.txt
-        if dir_game == '.DS_Store' or "feature_var" in dir_game or "feature_mean" in dir_game:
+        if 'DS_Store' in dir_game or "feature_var" in dir_game or "feature_mean" in dir_game:
             continue
 
         # find data file names
