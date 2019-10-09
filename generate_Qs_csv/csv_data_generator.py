@@ -33,35 +33,35 @@ DATA_STORE = "/cs/oschulte/xiangyus/2019-icehockey-data-preprocessed/2018-2019"
 DIR_GAMES_ALL = os.listdir(DATA_STORE)
 
 timestamp = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
-data_file_name = 'sportlogiq_data_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
+Q_file_name = 'Q_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
+impact_file_name = 'impact_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 
-def write_Q_data_txt(fileWriter, Q_values, state_features, action_index):
-    current_batch_size = len(Q_values)
-    for batch_index in range(0, current_batch_size):
-        Q_value = str(Q_values[batch_index][0]).strip() # only the Q_home for now
+def write_Q_data_txt(Q_file_Writer, impact_file_Writer, Q_values, impacts, state_features, action_index):
+    for state_index in range(0, len(Q_values)):
+        Q_value = str(Q_values[state_index][0]).strip() # only the Q_home for now, [0]
 
         # the first 12 elements are state features
         action_index_in_feature = 12 + action_index
 
         # generate the data only if the action of the current event is what we want
         # current event is index 9
-        if state_features[batch_index][9][action_index_in_feature] > 0:
+        if state_features[state_index][9][action_index_in_feature] > 0:
 
             # flat the state features of all histories
             state_feature = ''
-            for history_index in range(0, len(state_features[batch_index])):
+            for history_index in range(0, len(state_features[state_index])):
             # for history_index in range(0, 1): # only consider the curent state
-                for feature_index in range(0, len(state_features[batch_index][history_index])):
+                for feature_index in range(0, len(state_features[state_index][history_index])):
                     # ignore actions of current state, since we only generate data for 1 action
                     if history_index == 9 and feature_index >= 12:
                         continue
                     
-                    state_feature_value = state_features[batch_index][history_index][feature_index]
+                    state_feature_value = state_features[state_index][history_index][feature_index]
 
                     # action is no longer normalized
                     # # check if it is action and change action to one-hot
                     # if feature_index >= 12: 
-                    #     if state_features[batch_index][history_index][feature_index] > 0:
+                    #     if state_features[state_index][history_index][feature_index] > 0:
                     #         state_feature_value = 1
                     #     else:
                     #         state_feature_value = 0
@@ -70,9 +70,14 @@ def write_Q_data_txt(fileWriter, Q_values, state_features, action_index):
 
             # write a line [Q, state_features_history_1, state_features_history_2, one_hot_action_history_2, ..., state_features_history_10, one_hot_action_history_10]
             # [:-1] to remove last comma
-            fileWriter.write(Q_value.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
+            Q_file_Writer.write(Q_value.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
 
-def generate(sess, model, fileWriter, action_index):
+            # impacts for home team
+            if impacts[state_index] is not None:
+                impact = str(impacts[state_index][0]).strip() # only the home impact, [0]
+                impact_file_Writer.write(impact.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
+
+def generate(sess, model, Q_file_Writer, impact_file_Writer, action_index):
     # loading network
     saver = tf.train.Saver()
     sess.run(tf.global_variables_initializer())
@@ -132,6 +137,10 @@ def generate(sess, model, fileWriter, action_index):
         s_t0 = np.concatenate((state_input[train_number], action_input[train_number]), axis=1)
         train_number += 1
 
+        Q_values_game = []
+        padding_front_states_game = []
+        impacts_game = []
+
         while True:
             batch_return, train_number, s_tl = get_together_training_batch(s_t0,
             state_input,action_input,reward,train_number,train_len,state_trace_length,BATCH_SIZE)
@@ -142,11 +151,12 @@ def generate(sess, model, fileWriter, action_index):
 
             terminal = batch_return[len(batch_return) - 1][5]
 
-            # calculate Q values
+            # calculate Q values 
+            # home Q values for both home taking possession and away taking possession
             [Q_values] = sess.run([model.read_out], feed_dict={model.rnn_input_ph: s_t0_batch, model.trace_lengths_ph: trace_t0_batch})
+            Q_values_game.extend(Q_values)
 
             # move padding events from the end to the front
-            padding_front_batch = []
             for state in s_t0_batch:
                 padding_front_state = []
                 for event in state:
@@ -159,16 +169,31 @@ def generate(sess, model, fileWriter, action_index):
                     else:
                         padding_front_state.append(event)
 
-                padding_front_batch.append(padding_front_state)
-
-            write_Q_data_txt(fileWriter, Q_values, padding_front_batch, action_index)
+                padding_front_states_game.append(padding_front_state)
 
             s_t0 = s_tl
 
             if terminal:
                 break
+        
+        # after a whole game 
+        # calculate impact for home team 
+        for i in range(1, len(Q_values_game)):
+            # home team, value is normalized
+            if padding_front_states_game[i][-1][9] > 0:
+                impact_home = Q_values_game[i] - Q_values_game[i-1]
+            # away team, value is normalized
+            elif padding_front_states_game[i][-1][10] > 0:
+                impact_home = None # ignore away team for now
+            else:
+                raise ValueError('home or away??? must be one of them.')
 
-def generation_start(fileWriter, action_index):
+            impacts_game.append(impact_home)
+
+        # write data for a whole game 
+        write_Q_data_txt(Q_file_Writer, impact_file_Writer, Q_values_game, impacts_game, padding_front_states_game, action_index)
+
+def generation_start(Q_file_Writer, impact_file_Writer, action_index):
     sess_nn = tf.InteractiveSession()
 
     # define model 
@@ -178,9 +203,11 @@ def generation_start(fileWriter, action_index):
     model_nn()
     sess_nn.run(tf.global_variables_initializer())
 
-    generate(sess_nn, model_nn, fileWriter, action_index)
+    generate(sess_nn, model_nn, Q_file_Writer, impact_file_Writer, action_index)
 
-def generete_csv_header(fileWriter):
+# value_type==1: Q
+# value_type==2: impact
+def generete_csv_header(file_Writer, value_type):
     # 3: data file name, NA, which line to start with
     # 1: Q
     # (12 + 27) * 9: (state features + one hot action) * 9 history events
@@ -189,16 +216,21 @@ def generete_csv_header(fileWriter):
     history_count = 10
     for line in range(0, 3 + 1 + (12 + 27) * 9 + 12):
         if line == 0:
-            # fileWriter.write(data_file_name + '\n')
+            # Q_file_Writer.write(Q_file_name + '\n')
             pass
         elif line == 1:
-            # fileWriter.write('NA\n')
+            # Q_file_Writer.write('NA\n')
             pass
         elif line ==2:
-            # fileWriter.write('1\n')
+            # Q_file_Writer.write('1\n')
             pass
         elif line == 3:
-            header_str = header_str + 'Q,'
+            if value_type == 1:
+                header_str = header_str + 'Q,'
+            elif value_type == 2:
+                header_str = header_str + 'impact,'
+            else:
+                raise ValueError('Q or impact??? must be one of them.')
 
         elif line == 4 or (line - 3 - 1) % 39 == 0:
             history_count = history_count - 1
@@ -244,18 +276,21 @@ def generete_csv_header(fileWriter):
 
     # [:-1] to remove last comma
     header_str = header_str[:-1]
-    fileWriter.write(header_str + '\n')
+    file_Writer.write(header_str + '\n')
 
 if __name__ == '__main__':
     if not os.path.isdir(Q_data_DIR):
         os.mkdir(Q_data_DIR)
 
-    fileWriter = open(Q_data_DIR + '/' + data_file_name, 'w')
+    Q_file_Writer = open(Q_data_DIR + '/' + Q_file_name, 'w')
+    impact_file_Writer = open(Q_data_DIR + '/' + impact_file_name, 'w')
 
-    generete_csv_header(fileWriter)
+    generete_csv_header(Q_file_Writer, 1) # value_type==1: Q
+    generete_csv_header(impact_file_Writer, 2) # value_type==2: impact
 
     # the generated Q data file only contains data which has action 'ACTION_TO_MIMIC'
     action_index = action_all.index(ACTION_TO_MIMIC)
     
-    generation_start(fileWriter, action_index)
-    fileWriter.close()
+    generation_start(Q_file_Writer, impact_file_Writer, action_index)
+    Q_file_Writer.close()
+    impact_file_Writer.close()
