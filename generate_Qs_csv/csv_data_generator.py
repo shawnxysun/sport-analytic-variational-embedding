@@ -27,8 +27,8 @@ SAVED_NETWORK = save_mother_dir + '/models/'
 
 Q_data_DIR = save_mother_dir + '/' + directory_generated_Q_data
 
-# DATA_STORE = "/Users/xiangyusun/Desktop/2019-icehockey-data-preprocessed/2018-2019"
 DATA_STORE = "/cs/oschulte/xiangyus/2019-icehockey-data-preprocessed/2018-2019"
+# DATA_STORE = "/Users/xiangyusun/Desktop/2019-icehockey-data-preprocessed/2018-2019"
 
 DIR_GAMES_ALL = os.listdir(DATA_STORE)
 
@@ -178,6 +178,7 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, action_index):
         
         # after a whole game 
         # calculate impact for home team 
+        impacts_game.append(None) # placeholder for the first state
         for i in range(1, len(Q_values_game)):
             # home team, value is normalized
             if padding_front_states_game[i][-1][9] > 0:
