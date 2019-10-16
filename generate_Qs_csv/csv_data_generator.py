@@ -38,7 +38,7 @@ timestamp = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
 Q_file_name = 'Q_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 impact_file_name = 'impact_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 
-# 146231 is the total number of Q data for action shot, we want to generate half many artificial data for the same action (shot). Accroding to Galen's paper, there are 3M events in total. We will stop generating new data when half is researched
+# 146231 is the total number of Q data for action shot, we want to generate half as many artificial data as the real data for an action (shot). We will stop generating new artificial data when half as many is researched. Accroding to Galen's paper, there are 3M events in total. 
 total_number_of_artificial_data = 146231.0 / 2.0
 chance_to_simulate =  total_number_of_artificial_data / 3000000.0
 number_of_artificial_data_generated = 0
@@ -95,6 +95,7 @@ def write_Q_data_txt(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Write
                     impact = str(impacts[state_index][0]).strip() # only the home impact, [0]
                     impact_file_Writer.write(impact.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
 
+        # generate artificial data
         else:
             artificial_Q_value = str(artificial_Q_values[artificial_Q_index][0]).strip() # only the Q_home for now, [0]
             artificial_Q_index = artificial_Q_index + 1
