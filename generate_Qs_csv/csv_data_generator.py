@@ -3,6 +3,8 @@ import tensorflow as tf
 import os
 import scipy.io as sio
 import numpy as np
+import copy
+import random
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)) + "/..")
@@ -36,48 +38,85 @@ timestamp = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
 Q_file_name = 'Q_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 impact_file_name = 'impact_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 
-def write_Q_data_txt(Q_file_Writer, impact_file_Writer, Q_values, impacts, state_features, action_index):
-    for state_index in range(0, len(Q_values)):
-        Q_value = str(Q_values[state_index][0]).strip() # only the Q_home for now, [0]
+# 146231 is the total number of Q data for action shot, we want to generate half many artificial data for the same action (shot). Accroding to Galen's paper, there are 3M events in total. We will stop generating new data when half is researched
+total_number_of_artificial_data = 146231.0 / 2.0
+chance_to_simulate =  total_number_of_artificial_data / 3000000.0
+number_of_artificial_data_generated = 0
+aritificial_Q_file_name = 'aritificial_Q_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 
-        # the first 12 elements are state features
-        action_index_in_feature = 12 + action_index
+def get_action_index_in_feature(action_index):
+    # the first 12 elements are state features
+    return 12 + action_index
+
+def make_csv_data_line(state_features, state_index):
+    # flat the state features of all histories
+    state_feature = ''
+    for history_index in range(0, len(state_features[state_index])):
+    # for history_index in range(0, 1): # only consider the curent state
+        for feature_index in range(0, len(state_features[state_index][history_index])):
+            # ignore actions of current state, since we only generate data for 1 action
+            if history_index == 9 and feature_index >= 12:
+                continue
+            
+            state_feature_value = state_features[state_index][history_index][feature_index]
+
+            # action is no longer normalized
+            # # check if it is action and change action to one-hot
+            # if feature_index >= 12: 
+            #     if state_features[state_index][history_index][feature_index] > 0:
+            #         state_feature_value = 1
+            #     else:
+            #         state_feature_value = 0
+
+            state_feature = state_feature + str(state_feature_value).strip() + ','
+    
+    return state_feature
+
+def write_Q_data_txt(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, Q_values, impacts, artificial_Q_values, state_features, action_index_in_feature):
+    # Q values, artificial Q values, and states are created in the same order, with artificial Q values being shorter, so 'state_index' works for all of them
+    artificial_Q_index = 0
+    for state_index in range(0, len(Q_values)):
 
         # generate the data only if the action of the current event is what we want
         # current event is index 9
         if state_features[state_index][9][action_index_in_feature] > 0:
-
-            # flat the state features of all histories
-            state_feature = ''
-            for history_index in range(0, len(state_features[state_index])):
-            # for history_index in range(0, 1): # only consider the curent state
-                for feature_index in range(0, len(state_features[state_index][history_index])):
-                    # ignore actions of current state, since we only generate data for 1 action
-                    if history_index == 9 and feature_index >= 12:
-                        continue
-                    
-                    state_feature_value = state_features[state_index][history_index][feature_index]
-
-                    # action is no longer normalized
-                    # # check if it is action and change action to one-hot
-                    # if feature_index >= 12: 
-                    #     if state_features[state_index][history_index][feature_index] > 0:
-                    #         state_feature_value = 1
-                    #     else:
-                    #         state_feature_value = 0
-
-                    state_feature = state_feature + str(state_feature_value).strip() + ','
-
+            
+            Q_value = str(Q_values[state_index][0]).strip() # only the Q_home for now, [0]
+            state_feature = make_csv_data_line(state_features, state_index)
+            
             # write a line [Q, state_features_history_1, state_features_history_2, one_hot_action_history_2, ..., state_features_history_10, one_hot_action_history_10]
             # [:-1] to remove last comma
-            Q_file_Writer.write(Q_value.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
+            if Q_file_Writer is not None:
+                Q_file_Writer.write(Q_value.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
 
             # impacts for home team
-            if impacts[state_index] is not None:
-                impact = str(impacts[state_index][0]).strip() # only the home impact, [0]
-                impact_file_Writer.write(impact.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
+            if impact_file_Writer is not None:
+                if impacts[state_index] is not None:
+                    impact = str(impacts[state_index][0]).strip() # only the home impact, [0]
+                    impact_file_Writer.write(impact.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
 
-def generate(sess, model, Q_file_Writer, impact_file_Writer, action_index):
+        else:
+            artificial_Q_value = str(artificial_Q_values[artificial_Q_index][0]).strip() # only the Q_home for now, [0]
+            artificial_Q_index = artificial_Q_index + 1
+
+            state_feature = make_csv_data_line(state_features, state_index)
+            # if this data is used generate artificial data since its original action is not what we want
+            if aritificial_Q_file_Writer is not None:
+                global number_of_artificial_data_generated
+                # if the number of required artificial data is not reached 
+                if number_of_artificial_data_generated < total_number_of_artificial_data:
+                    # generate artificial data by chance 
+                    randomValue = random.random()
+                    if randomValue <= chance_to_simulate:
+                        aritificial_Q_file_Writer.write(artificial_Q_value.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
+                        number_of_artificial_data_generated = number_of_artificial_data_generated + 1
+
+    if aritificial_Q_file_Writer is not None:
+        print("\n number_of_artificial_data_generated: " + str(number_of_artificial_data_generated))
+        if artificial_Q_index != len(artificial_Q_values):
+            raise ValueError('all artificial_Q_values should have been used')
+
+def generate(sess, model, Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, action_index):
     # loading network
     saver = tf.train.Saver()
     sess.run(tf.global_variables_initializer())
@@ -137,9 +176,12 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, action_index):
         s_t0 = np.concatenate((state_input[train_number], action_input[train_number]), axis=1)
         train_number += 1
 
+        action_index_in_feature = get_action_index_in_feature(action_index)
+
         Q_values_game = []
         padding_front_states_game = []
         impacts_game = []
+        artificial_Q_values_game = []
 
         while True:
             batch_return, train_number, s_tl = get_together_training_batch(s_t0,
@@ -156,6 +198,37 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, action_index):
             [Q_values] = sess.run([model.read_out], feed_dict={model.rnn_input_ph: s_t0_batch, model.trace_lengths_ph: trace_t0_batch})
             Q_values_game.extend(Q_values)
 
+            # replace the real action by the action to simulate to generate Q values for artificial data of the action 
+            if aritificial_Q_file_Writer is not None:
+                artificial_s_t0_batch = []
+                temp_trace_t0_batch = []
+                for s_t0_batch_index in range(len(s_t0_batch)):
+                    # if the data is for the action to simulate, ignore it
+                    # the current event index is not 0, is trace_length - 1
+                    current_event_index = trace_t0_batch[s_t0_batch_index] - 1
+                    if s_t0_batch[s_t0_batch_index][current_event_index][action_index_in_feature] > 0:
+                        pass
+                    # if the data is not for the actual action to simulate, then generate the artificial data by modifying action
+                    else:
+                        # make a copy of the original state so we do not modify the original data 
+                        artificial_s_t0 = copy.deepcopy(s_t0_batch[s_t0_batch_index])
+
+                        for artificial_index in range(len(artificial_s_t0[current_event_index])):
+                            # the first 12 indexes are not for actions 
+                            if artificial_index >= 12:
+                                # set all action_bits to 0
+                                artificial_s_t0[current_event_index][artificial_index] = 0
+                        
+                        # set the index of action to simulate to 1
+                        artificial_s_t0[current_event_index][action_index_in_feature] = 1
+
+                        artificial_s_t0_batch.append(artificial_s_t0)
+                        temp_trace_t0_batch.append(trace_t0_batch[s_t0_batch_index])
+                        
+                # calculate artificial Q values 
+                [artificial_Q_values] = sess.run([model.read_out], feed_dict={model.rnn_input_ph: artificial_s_t0_batch, model.trace_lengths_ph: temp_trace_t0_batch})
+                artificial_Q_values_game.extend(artificial_Q_values)
+
             # move padding events from the end to the front
             for state in s_t0_batch:
                 padding_front_state = []
@@ -163,8 +236,9 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, action_index):
                     # if both event home and away are 0, it's paddings
                     home = event[9]
                     away = event[10]
+
+                    # the event is padding if both home and away are 0s, since real home and away cannot be the same value and also normalized.
                     if home == 0 and away == 0:
-                        # the event is padding
                         padding_front_state.insert(0, event)
                     else:
                         padding_front_state.append(event)
@@ -192,9 +266,9 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, action_index):
             impacts_game.append(impact_home)
 
         # write data for a whole game 
-        write_Q_data_txt(Q_file_Writer, impact_file_Writer, Q_values_game, impacts_game, padding_front_states_game, action_index)
+        write_Q_data_txt(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, Q_values_game, impacts_game, artificial_Q_values_game, padding_front_states_game, action_index_in_feature)
 
-def generation_start(Q_file_Writer, impact_file_Writer, action_index):
+def generation_start(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, action_index):
     sess_nn = tf.InteractiveSession()
 
     # define model 
@@ -204,7 +278,7 @@ def generation_start(Q_file_Writer, impact_file_Writer, action_index):
     model_nn()
     sess_nn.run(tf.global_variables_initializer())
 
-    generate(sess_nn, model_nn, Q_file_Writer, impact_file_Writer, action_index)
+    generate(sess_nn, model_nn, Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, action_index)
 
 # value_type==1: Q
 # value_type==2: impact
@@ -283,15 +357,34 @@ if __name__ == '__main__':
     if not os.path.isdir(Q_data_DIR):
         os.mkdir(Q_data_DIR)
 
+    # Q_file_Writer = None
     Q_file_Writer = open(Q_data_DIR + '/' + Q_file_name, 'w')
+
+    # impact_file_Writer = None
     impact_file_Writer = open(Q_data_DIR + '/' + impact_file_name, 'w')
 
-    generete_csv_header(Q_file_Writer, 1) # value_type==1: Q
-    generete_csv_header(impact_file_Writer, 2) # value_type==2: impact
+    # aritificial_Q_file_Writer = None 
+    aritificial_Q_file_Writer = open(Q_data_DIR + '/' + aritificial_Q_file_name, 'w')
+
+    if Q_file_Writer is not None:
+        generete_csv_header(Q_file_Writer, 1) # value_type==1: Q
+
+    if impact_file_Writer is not None:
+        generete_csv_header(impact_file_Writer, 2) # value_type==2: impact
+
+    if aritificial_Q_file_Writer is not None:
+        generete_csv_header(aritificial_Q_file_Writer, 1) # value_type==1: Q
 
     # the generated Q data file only contains data which has action 'ACTION_TO_MIMIC'
     action_index = action_all.index(ACTION_TO_MIMIC)
     
-    generation_start(Q_file_Writer, impact_file_Writer, action_index)
-    Q_file_Writer.close()
-    impact_file_Writer.close()
+    generation_start(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, action_index)
+
+    if Q_file_Writer is not None:
+        Q_file_Writer.close()
+
+    if impact_file_Writer is not None:
+        impact_file_Writer.close()
+
+    if aritificial_Q_file_Writer is not None:
+        aritificial_Q_file_Writer.close()
