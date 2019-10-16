@@ -42,7 +42,7 @@ impact_file_name = 'impact_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 total_number_of_artificial_data = 146231.0 / 2.0
 chance_to_simulate =  total_number_of_artificial_data / 3000000.0
 number_of_artificial_data_generated = 0
-aritificial_Q_file_name = 'aritificial_Q_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
+artificial_Q_file_name = 'artificial_Q_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 
 def get_action_index_in_feature(action_index):
     # the first 12 elements are state features
@@ -72,7 +72,7 @@ def make_csv_data_line(state_features, state_index):
     
     return state_feature
 
-def write_Q_data_txt(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, Q_values, impacts, artificial_Q_values, state_features, action_index_in_feature):
+def write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, Q_values, impacts, artificial_Q_values, state_features, action_index_in_feature):
     # Q values, artificial Q values, and states are created in the same order, with artificial Q values being shorter, so 'state_index' works for all of them
     artificial_Q_index = 0
     for state_index in range(0, len(Q_values)):
@@ -102,22 +102,22 @@ def write_Q_data_txt(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Write
 
             state_feature = make_csv_data_line(state_features, state_index)
             # if this data is used generate artificial data since its original action is not what we want
-            if aritificial_Q_file_Writer is not None:
+            if artificial_Q_file_Writer is not None:
                 global number_of_artificial_data_generated
                 # if the number of required artificial data is not reached 
                 if number_of_artificial_data_generated < total_number_of_artificial_data:
                     # generate artificial data by chance 
                     randomValue = random.random()
                     if randomValue <= chance_to_simulate:
-                        aritificial_Q_file_Writer.write(artificial_Q_value.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
+                        artificial_Q_file_Writer.write(artificial_Q_value.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
                         number_of_artificial_data_generated = number_of_artificial_data_generated + 1
 
-    if aritificial_Q_file_Writer is not None:
+    if artificial_Q_file_Writer is not None:
         print("\n number_of_artificial_data_generated: " + str(number_of_artificial_data_generated))
         if artificial_Q_index != len(artificial_Q_values):
             raise ValueError('all artificial_Q_values should have been used')
 
-def generate(sess, model, Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, action_index):
+def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, action_index):
     # loading network
     saver = tf.train.Saver()
     sess.run(tf.global_variables_initializer())
@@ -200,7 +200,7 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, aritificial_Q_file_
             Q_values_game.extend(Q_values)
 
             # replace the real action by the action to simulate to generate Q values for artificial data of the action 
-            if aritificial_Q_file_Writer is not None:
+            if artificial_Q_file_Writer is not None:
                 artificial_s_t0_batch = []
                 temp_trace_t0_batch = []
                 for s_t0_batch_index in range(len(s_t0_batch)):
@@ -267,9 +267,9 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, aritificial_Q_file_
             impacts_game.append(impact_home)
 
         # write data for a whole game 
-        write_Q_data_txt(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, Q_values_game, impacts_game, artificial_Q_values_game, padding_front_states_game, action_index_in_feature)
+        write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, Q_values_game, impacts_game, artificial_Q_values_game, padding_front_states_game, action_index_in_feature)
 
-def generation_start(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, action_index):
+def generation_start(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, action_index):
     sess_nn = tf.InteractiveSession()
 
     # define model 
@@ -279,7 +279,7 @@ def generation_start(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Write
     model_nn()
     sess_nn.run(tf.global_variables_initializer())
 
-    generate(sess_nn, model_nn, Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, action_index)
+    generate(sess_nn, model_nn, Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, action_index)
 
 # value_type==1: Q
 # value_type==2: impact
@@ -364,8 +364,8 @@ if __name__ == '__main__':
     # impact_file_Writer = None
     impact_file_Writer = open(Q_data_DIR + '/' + impact_file_name, 'w')
 
-    # aritificial_Q_file_Writer = None 
-    aritificial_Q_file_Writer = open(Q_data_DIR + '/' + aritificial_Q_file_name, 'w')
+    # artificial_Q_file_Writer = None 
+    artificial_Q_file_Writer = open(Q_data_DIR + '/' + artificial_Q_file_name, 'w')
 
     if Q_file_Writer is not None:
         generete_csv_header(Q_file_Writer, 1) # value_type==1: Q
@@ -373,13 +373,13 @@ if __name__ == '__main__':
     if impact_file_Writer is not None:
         generete_csv_header(impact_file_Writer, 2) # value_type==2: impact
 
-    if aritificial_Q_file_Writer is not None:
-        generete_csv_header(aritificial_Q_file_Writer, 1) # value_type==1: Q
+    if artificial_Q_file_Writer is not None:
+        generete_csv_header(artificial_Q_file_Writer, 1) # value_type==1: Q
 
     # the generated Q data file only contains data which has action 'ACTION_TO_MIMIC'
     action_index = action_all.index(ACTION_TO_MIMIC)
     
-    generation_start(Q_file_Writer, impact_file_Writer, aritificial_Q_file_Writer, action_index)
+    generation_start(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, action_index)
 
     if Q_file_Writer is not None:
         Q_file_Writer.close()
@@ -387,5 +387,5 @@ if __name__ == '__main__':
     if impact_file_Writer is not None:
         impact_file_Writer.close()
 
-    if aritificial_Q_file_Writer is not None:
-        aritificial_Q_file_Writer.close()
+    if artificial_Q_file_Writer is not None:
+        artificial_Q_file_Writer.close()
