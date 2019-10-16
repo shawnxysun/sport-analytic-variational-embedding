@@ -18,19 +18,23 @@ from config.cvrnn_config import CVRNNCongfig
 
 from utils import handle_trace_length, get_together_training_batch, compromise_state_trace_length
 from configuration import MODEL_TYPE, MAX_TRACE_LENGTH, FEATURE_NUMBER, BATCH_SIZE, GAMMA, H_SIZE, \
-    model_train_continue, FEATURE_TYPE, ITERATE_NUM, learning_rate, SPORT, directory_generated_Q_data, \
-    save_mother_dir, action_all
+    model_train_continue, FEATURE_TYPE, ITERATE_NUM, learning_rate, SPORT, action_all
 
 ACTION_TO_MIMIC = 'shot'
 
 trained_model_name = 'Ice-Hockey-game--901'
 
-SAVED_NETWORK = save_mother_dir + '/models/'
-
-Q_data_DIR = save_mother_dir + '/' + directory_generated_Q_data
+save_mother_dir = "/cs/oschulte/xiangyus/DRL-ice-hockey-saves"
+# save_mother_dir = "/Users/xiangyusun/Desktop"
 
 DATA_STORE = "/cs/oschulte/xiangyus/2019-icehockey-data-preprocessed/2018-2019"
 # DATA_STORE = "/Users/xiangyusun/Desktop/2019-icehockey-data-preprocessed/2018-2019"
+
+SAVED_NETWORK = save_mother_dir + '/models/'
+
+directory_generated_Q_data = "Q_data"
+
+Q_data_DIR = save_mother_dir + '/' + directory_generated_Q_data
 
 DIR_GAMES_ALL = os.listdir(DATA_STORE)
 
@@ -48,9 +52,47 @@ def get_action_index_in_feature(action_index):
     # the first 12 elements are state features
     return 12 + action_index
 
+# convert s2, s1, s0(current), padding, padding, ...
+# to padding, padding, ..., s2, s1, s0(current)
+def convert_to_padding_front(padding_end_state):
+    padding_front_state = []
+    for event in padding_end_state:
+        # if both event home and away are 0, it's paddings
+        home = event[9]
+        away = event[10]
+
+        # the event is padding if both home and away are 0s, since real home and away cannot be the same value and also normalized.
+        if home == 0 and away == 0:
+            padding_front_state.insert(0, event)
+        else:
+            padding_front_state.append(event)
+    
+    return padding_front_state
+
+# convert padding, padding, ..., s2, s1, s0(current)
+# back to s2, s1, s0(current), padding, padding, ...
+def convert_back_to_padding_end(padding_front_state):
+    padding_end_state = []
+    paddings = []
+    for event in padding_front_state:
+        # if both event home and away are 0, it's paddings
+        home = event[9]
+        away = event[10]
+
+        # the event is padding if both home and away are 0s, since real home and away cannot be the same value and also normalized.
+        if home == 0 and away == 0:
+            # padding_front_state.insert(0, event)
+            paddings.append(event)
+        else:
+            # padding_front_state.append(event)
+            padding_end_state.append(event)
+    
+    padding_end_state = padding_end_state + paddings
+    return padding_end_state
+
 def make_csv_data_line(state_features, state_index):
     # flat the state features of all histories
-    state_feature = ''
+    state_feature_str = ''
     for history_index in range(0, len(state_features[state_index])):
     # for history_index in range(0, 1): # only consider the curent state
         for feature_index in range(0, len(state_features[state_index][history_index])):
@@ -68,54 +110,74 @@ def make_csv_data_line(state_features, state_index):
             #     else:
             #         state_feature_value = 0
 
-            state_feature = state_feature + str(state_feature_value).strip() + ','
+            state_feature_str = state_feature_str + str(state_feature_value).strip() + ','
     
-    return state_feature
+    return state_feature_str
 
-def write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, Q_values, impacts, artificial_Q_values, state_features, action_index_in_feature):
-    # Q values, artificial Q values, and states are created in the same order, with artificial Q values being shorter, so 'state_index' works for all of them
-    artificial_Q_index = 0
+def write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, Q_values, impacts, padding_front_states, action_index_in_feature, trace_lengths, model, session):
+    # Q values, trace lengths, and states are created in the same order, so 'state_index' works for all of them
     for state_index in range(0, len(Q_values)):
 
         # generate the data only if the action of the current event is what we want
         # current event is index 9
-        if state_features[state_index][9][action_index_in_feature] > 0:
+        if padding_front_states[state_index][9][action_index_in_feature] > 0:
             
             Q_value = str(Q_values[state_index][0]).strip() # only the Q_home for now, [0]
-            state_feature = make_csv_data_line(state_features, state_index)
+            state_feature_str = make_csv_data_line(padding_front_states, state_index)
             
             # write a line [Q, state_features_history_1, state_features_history_2, one_hot_action_history_2, ..., state_features_history_10, one_hot_action_history_10]
             # [:-1] to remove last comma
             if Q_file_Writer is not None:
-                Q_file_Writer.write(Q_value.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
+                Q_file_Writer.write(Q_value.strip() + ',' + (state_feature_str.strip()[:-1]) + '\n')
 
             # impacts for home team
             if impact_file_Writer is not None:
                 if impacts[state_index] is not None:
                     impact = str(impacts[state_index][0]).strip() # only the home impact, [0]
-                    impact_file_Writer.write(impact.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
+                    impact_file_Writer.write(impact.strip() + ',' + (state_feature_str.strip()[:-1]) + '\n')
 
         # generate artificial data
         else:
-            artificial_Q_value = str(artificial_Q_values[artificial_Q_index][0]).strip() # only the Q_home for now, [0]
-            artificial_Q_index = artificial_Q_index + 1
+            # if the number of required artificial data is not reached 
+            global number_of_artificial_data_generated
+            if number_of_artificial_data_generated < total_number_of_artificial_data:
+                # generate artificial data by chance 
+                randomValue = random.random()
+                if randomValue <= chance_to_simulate:
+                
+                    padding_end_state = convert_back_to_padding_end(padding_front_states[state_index])
 
-            state_feature = make_csv_data_line(state_features, state_index)
-            # if this data is used generate artificial data since its original action is not what we want
-            if artificial_Q_file_Writer is not None:
-                global number_of_artificial_data_generated
-                # if the number of required artificial data is not reached 
-                if number_of_artificial_data_generated < total_number_of_artificial_data:
-                    # generate artificial data by chance 
-                    randomValue = random.random()
-                    if randomValue <= chance_to_simulate:
-                        artificial_Q_file_Writer.write(artificial_Q_value.strip() + ',' + (state_feature.strip()[:-1]) + '\n')
-                        number_of_artificial_data_generated = number_of_artificial_data_generated + 1
+                    # make a copy of the original state so we do not modify the original data 
+                    artificial_padding_end_state = copy.deepcopy(padding_end_state)
+
+                    # the current event index is not 0, is trace_length - 1
+                    current_event_index = trace_lengths[state_index] - 1
+
+                    artificial_padding_end_current_event = artificial_padding_end_state[current_event_index]
+
+                    # replace the real action by the artificial action
+                    for artificial_index in range(len(artificial_padding_end_current_event)):
+                        # the first 12 indexes are not for actions 
+                        if artificial_index >= 12:
+                            # set all action_bits to 0
+                            artificial_padding_end_current_event[artificial_index] = 0
+                    
+                    # set artificial action to 1
+                    artificial_padding_end_current_event[action_index_in_feature] = 1
+
+                    [artificial_Q_values] = session.run([model.read_out], feed_dict={model.rnn_input_ph: [artificial_padding_end_state], model.trace_lengths_ph: [trace_lengths[state_index]]})
+
+                    artificial_Q_value = str(artificial_Q_values[0][0]).strip() # only the Q_home for now, [0]
+
+                    # since CSV training file does not contain the action of current event, so we don't need to pass in artificial state here
+                    state_feature_str = make_csv_data_line(padding_front_states, state_index)
+
+                    artificial_Q_file_Writer.write(artificial_Q_value.strip() + ',' + (state_feature_str.strip()[:-1]) + '\n')
+
+                    number_of_artificial_data_generated = number_of_artificial_data_generated + 1
 
     if artificial_Q_file_Writer is not None:
         print("\n number_of_artificial_data_generated: " + str(number_of_artificial_data_generated))
-        if artificial_Q_index != len(artificial_Q_values):
-            raise ValueError('all artificial_Q_values should have been used')
 
 def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, action_index):
     # loading network
@@ -182,7 +244,7 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_W
         Q_values_game = []
         padding_front_states_game = []
         impacts_game = []
-        artificial_Q_values_game = []
+        trace_t0_game = []
 
         while True:
             batch_return, train_number, s_tl = get_together_training_batch(s_t0,
@@ -198,52 +260,11 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_W
             # home Q values for both home taking possession and away taking possession
             [Q_values] = sess.run([model.read_out], feed_dict={model.rnn_input_ph: s_t0_batch, model.trace_lengths_ph: trace_t0_batch})
             Q_values_game.extend(Q_values)
-
-            # replace the real action by the action to simulate to generate Q values for artificial data of the action 
-            if artificial_Q_file_Writer is not None:
-                artificial_s_t0_batch = []
-                temp_trace_t0_batch = []
-                for s_t0_batch_index in range(len(s_t0_batch)):
-                    # if the data is for the action to simulate, ignore it
-                    # the current event index is not 0, is trace_length - 1
-                    current_event_index = trace_t0_batch[s_t0_batch_index] - 1
-                    if s_t0_batch[s_t0_batch_index][current_event_index][action_index_in_feature] > 0:
-                        pass
-                    # if the data is not for the actual action to simulate, then generate the artificial data by modifying action
-                    else:
-                        # make a copy of the original state so we do not modify the original data 
-                        artificial_s_t0 = copy.deepcopy(s_t0_batch[s_t0_batch_index])
-
-                        for artificial_index in range(len(artificial_s_t0[current_event_index])):
-                            # the first 12 indexes are not for actions 
-                            if artificial_index >= 12:
-                                # set all action_bits to 0
-                                artificial_s_t0[current_event_index][artificial_index] = 0
-                        
-                        # set the index of action to simulate to 1
-                        artificial_s_t0[current_event_index][action_index_in_feature] = 1
-
-                        artificial_s_t0_batch.append(artificial_s_t0)
-                        temp_trace_t0_batch.append(trace_t0_batch[s_t0_batch_index])
-                        
-                # calculate artificial Q values 
-                [artificial_Q_values] = sess.run([model.read_out], feed_dict={model.rnn_input_ph: artificial_s_t0_batch, model.trace_lengths_ph: temp_trace_t0_batch})
-                artificial_Q_values_game.extend(artificial_Q_values)
+            trace_t0_game.extend(trace_t0_batch)
 
             # move padding events from the end to the front
-            for state in s_t0_batch:
-                padding_front_state = []
-                for event in state:
-                    # if both event home and away are 0, it's paddings
-                    home = event[9]
-                    away = event[10]
-
-                    # the event is padding if both home and away are 0s, since real home and away cannot be the same value and also normalized.
-                    if home == 0 and away == 0:
-                        padding_front_state.insert(0, event)
-                    else:
-                        padding_front_state.append(event)
-
+            for padding_end_state in s_t0_batch:
+                padding_front_state = convert_to_padding_front(padding_end_state)
                 padding_front_states_game.append(padding_front_state)
 
             s_t0 = s_tl
@@ -267,7 +288,7 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_W
             impacts_game.append(impact_home)
 
         # write data for a whole game 
-        write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, Q_values_game, impacts_game, artificial_Q_values_game, padding_front_states_game, action_index_in_feature)
+        write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, Q_values_game, impacts_game, padding_front_states_game, action_index_in_feature, trace_t0_game, model, sess)
 
 def generation_start(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, action_index):
     sess_nn = tf.InteractiveSession()

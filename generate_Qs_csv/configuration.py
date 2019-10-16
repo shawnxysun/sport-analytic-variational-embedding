@@ -12,9 +12,6 @@ FEATURE_TYPE = 5
 ITERATE_NUM = 30
 learning_rate = 1e-4
 SPORT = "NHL"
-save_mother_dir = "/cs/oschulte/xiangyus/DRL-ice-hockey-saves"
-# save_mother_dir = "/Users/xiangyusun/Desktop"
-directory_generated_Q_data = "Q_data"
 action_all = ['assist',
               'block',
               'carry',
