@@ -27,7 +27,7 @@ def process_seq_all(save_data_dir, start_folder='16752'):
     # start_flag = False
     folder_all = os.listdir(save_data_dir)
     for folder in folder_all:
-        if folder == '.DS_Store':
+        if '.DS_Store' in folder:
             continue
         # if folder == start_folder:
         #     start_flag = True
