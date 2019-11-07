@@ -164,7 +164,6 @@ class Preprocess:
         return switch
 
     def is_home_away(self, events, idx, gameId):
-
         for game_date in self.game_date_dict_all:
             if str(game_date.get('gameid')) == gameId:
                 home_team_id = str(game_date.get('team2id'))
@@ -245,6 +244,33 @@ class Preprocess:
             teamId = int(teamId)
             action = event.get('name')
 
+            if action == 'shot':
+                h_a = self.is_home_away(events, idx, gameId)
+
+                if h_a == 'H' and idx + 1 < len(events):
+                    print('')
+                    print('current action: {}'.format(action))
+
+                    next_h_a = self.is_home_away(events, idx+1, gameId)
+                    print('next team: {}'.format(next_h_a))
+
+                    next_event = events[idx+1]
+                    next_action = next_event.get('name')
+                    print('next action: {}'.format(next_action))
+
+                    next_team_action = next_h_a + ' ' + next_action
+
+                    total_duration = duration_dict.get(next_team_action, 0)
+                    count = count_dict.get(next_team_action, 0)
+
+                    duration = self.get_duration(events, idx)
+                    print('current duration: {}'.format(duration))
+
+                    duration_dict.update({next_team_action: total_duration + duration})
+                    count_dict.update({next_team_action: count + 1})
+
+                    
+
             if self.is_switch_possession(events, idx) or self.is_goal(events, idx-1):
                 lt = 1
             else:
@@ -308,20 +334,23 @@ class Preprocess:
                 rewards_game.append(0)
             # rewards_game.append(reward)
 
-            player_id = event.get('playerId')
-            player_index = self.player_basic_info_dict.get(player_id).get('index')
-            player_id_one_hot = [0] * len(self.player_basic_info_dict)
-            player_id_one_hot[player_index] = 1
+            # player_id = event.get('playerId')
+            # player_index = self.player_basic_info_dict.get(player_id).get('index')
+            # player_id_one_hot = [0] * len(self.player_basic_info_dict)
+            # player_id_one_hot[player_index] = 1
+
+            player_id_one_hot = None
             player_index_game.append(player_id_one_hot)
 
-            state_feature_game.append(np.asarray(features_all))
-            action_game.append(np.asarray(action_one_hot_vector))
-            team_game.append(np.asarray(team_one_hot_vector))
-            lt_game.append(lt)
+            # state_feature_game.append(np.asarray(features_all))
+            # action_game.append(np.asarray(action_one_hot_vector))
+            # team_game.append(np.asarray(team_one_hot_vector))
+            # lt_game.append(lt)
+            player_id = None
             player_id_game.append(player_id)
         return state_feature_game, action_game, team_game, lt_game, rewards_game, player_id_game, player_index_game
 
-    def scale_allgame_features(self):
+    def scale_allgame_features(self):        
         files_all = os.listdir(self.hockey_data_dir)
         features_allgame = None
         for file in files_all:
@@ -401,9 +430,30 @@ class Preprocess:
 
 
 if __name__ == '__main__':
-    hockey_data_dir = '/Users/liu/Desktop/Ice-hokcey-data-sample/data-sample/'
+    # hockey_data_dir = '/Users/liu/Desktop/Ice-hokcey-data-sample/data-sample/'
     # hockey_data_dir = '/cs/oschulte/2019-icehockey-data/2018-2019/'
-    save_data_dir = '/cs/oschulte/Galen/Ice-hockey-data/2018-2019'
-    prep = Preprocess(hockey_data_dir=hockey_data_dir, save_data_dir=save_data_dir)
+    # save_data_dir = '/cs/oschulte/Galen/Ice-hockey-data/2018-2019'
+
+    # hockey_data_dir = '/Users/xiangyusun/Desktop/rcg-linux-ts2/2019-icehockey-data/2018-2019/'
+    hockey_data_dir = '/cs/oschulte/2019-icehockey-data/2018-2019/'
+
+    save_data_dir = './'
+
+    # game_date_dir = '/Users/xiangyusun/Development/sport-analytic-variational-embedding/resource/ice_hockey_201819/game_dates_2018_2019.json'
+    game_date_dir = '../resource/ice_hockey_201819/game_dates_2018_2019.json'
+
+    with open(game_date_dir, 'rb') as f:
+        game_date_dict = json.load(f)
+
+    prep = Preprocess(hockey_data_dir=hockey_data_dir, save_data_dir=save_data_dir, player_basic_info_dict=None, team_info_dict=None, game_date_dict=game_date_dict)
+
+    duration_dict = dict()
+    count_dict = dict()
+
     scaler = prep.scale_allgame_features()
-    prep.process_all(scaler)
+
+    print('duration_dict: {}'.format(duration_dict))
+    print('count_dict: {}'.format(count_dict))
+    
+    for key in duration_dict.keys():
+        print('key:{}, average duration: {}'.format(key, float(duration_dict.get(key))/float(count_dict.get(key))))
