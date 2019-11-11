@@ -22,7 +22,7 @@ from configuration import MODEL_TYPE, MAX_TRACE_LENGTH, FEATURE_NUMBER, BATCH_SI
 
 ACTION_TO_MIMIC = 'shot'
 
-trained_model_name = 'Ice-Hockey-game--901'
+trained_model_name = 'Ice-Hockey-game--10501'
 
 save_mother_dir = "/cs/oschulte/xiangyus/DRL-ice-hockey-saves"
 # save_mother_dir = "/Users/xiangyusun/Desktop"
