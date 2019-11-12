@@ -5,11 +5,19 @@ from build_seq import process_seq_all
 
 if __name__ == '__main__':
     hockey_data_dir = '/cs/oschulte/2019-icehockey-data/2018-2019/'
+    # hockey_data_dir = '/Users/xiangyusun/Desktop/2019-icehockey-data-small/2018-2019/'
+
     save_data_dir = '/cs/oschulte/xiangyus/2019-icehockey-data-preprocessed/2018-2019/'
+    # save_data_dir = '/Users/xiangyusun/Desktop/2019-icehockey-data-preprocessed/2018-2019/'
 
     player_basic_info_dir = '../resource/ice_hockey_201819/player_info_2018_2019.json'
+    # player_basic_info_dir = '/Users/xiangyusun/Development/sport-analytic-variational-embedding/resource/ice_hockey_201819/player_info_2018_2019.json'
+
     team_info_dir = '../resource/ice_hockey_201819/teams_NHL.json'
+    # team_info_dir = '/Users/xiangyusun/Development/sport-analytic-variational-embedding/resource/ice_hockey_201819/teams_NHL.json'
+
     game_date_dir = '../resource/ice_hockey_201819/game_dates_2018_2019.json'
+    # game_date_dir = '/Users/xiangyusun/Development/sport-analytic-variational-embedding/resource/ice_hockey_201819/game_dates_2018_2019.json'
 
     with open(player_basic_info_dir, 'rb') as f:
         player_basic_info_dict = json.load(f)

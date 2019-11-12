@@ -185,45 +185,86 @@ class Preprocess:
             raise ValueError('wrong home away id')
 
 
-    def is_switch_home_away(self, events, idx, gameId):  # compare with next timestamp
+    # def is_switch_home_away(self, events, idx, gameId):  # compare with next timestamp
+    #     switch = False
+    #     if idx == len(events) - 1:
+    #         switch = False
+    #     else:
+    #         h_a_now = self.is_home_away(events, idx, gameId)
+    #         h_a_next = self.is_home_away(events, idx + 1, gameId)
+    #         if h_a_now == h_a_next:
+    #             switch = False
+    #         else:
+    #             switch = True
+    #     return switch
+
+    def is_switch_home_away(self, events, idx, gameId):  # compare with previous timestamp
         switch = False
-        if idx == len(events) - 1:
+        if idx == 0:
             switch = False
         else:
             h_a_now = self.is_home_away(events, idx, gameId)
-            h_a_next = self.is_home_away(events, idx + 1, gameId)
-            if h_a_now == h_a_next:
+            h_a_previous = self.is_home_away(events, idx - 1, gameId)
+            if h_a_now == h_a_previous:
                 switch = False
             else:
                 switch = True
         return switch
 
-    def get_velocity(self, coord_next, coord_now, duration):
-        v = (float(coord_next) - float(coord_now)) / float(duration)
+    # def get_velocity(self, coord_next, coord_now, duration):
+    #     v = (float(coord_next) - float(coord_now)) / float(duration)
+    #     return v
+
+    def get_velocity(self, coord_previous, coord_now, duration):
+        v = (float(coord_now) - float(coord_previous)) / float(duration)
         return v
+
+    # def compute_v_x(self, events, idx, duration, gameId):
+    #     v_x = float(0)
+    #     if idx == len(events) - 1 or duration == 0:
+    #         v_x = float(0)
+    #     else:
+    #         coord_next = events[idx + 1].get('xAdjCoord')
+    #         coord_now = events[idx].get('xAdjCoord')
+    #         if self.is_switch_home_away(events, idx, gameId):
+    #             coord_next = -coord_next
+    #         v_x = self.get_velocity(coord_next, coord_now, duration)
+    #     return v_x
 
     def compute_v_x(self, events, idx, duration, gameId):
         v_x = float(0)
-        if idx == len(events) - 1 or duration == 0:
+        if idx == 0 or duration == 0:
             v_x = float(0)
         else:
-            coord_next = events[idx + 1].get('xAdjCoord')
+            coord_previous = events[idx - 1].get('xAdjCoord')
             coord_now = events[idx].get('xAdjCoord')
             if self.is_switch_home_away(events, idx, gameId):
-                coord_next = -coord_next
-            v_x = self.get_velocity(coord_next, coord_now, duration)
+                coord_previous = -coord_previous
+            v_x = self.get_velocity(coord_previous, coord_now, duration)
         return v_x
+
+    # def compute_v_y(self, events, idx, duration, gameId):
+    #     v_y = float(0)
+    #     if idx == len(events) - 1 or duration == 0:
+    #         v_y = float(0)
+    #     else:
+    #         coord_next = events[idx + 1].get('yAdjCoord')
+    #         coord_now = events[idx].get('yAdjCoord')
+    #         if self.is_switch_home_away(events, idx, gameId):
+    #             coord_next = -coord_next
+    #         v_y = self.get_velocity(coord_next, coord_now, duration)
+    #     return v_y
 
     def compute_v_y(self, events, idx, duration, gameId):
         v_y = float(0)
-        if idx == len(events) - 1 or duration == 0:
+        if idx == 0 or duration == 0:
             v_y = float(0)
         else:
-            coord_next = events[idx + 1].get('yAdjCoord')
+            coord_previous = events[idx - 1].get('yAdjCoord')
             coord_now = events[idx].get('yAdjCoord')
             if self.is_switch_home_away(events, idx, gameId):
-                coord_next = -coord_next
-            v_y = self.get_velocity(coord_next, coord_now, duration)
+                coord_previous = -coord_previous
+            v_y = self.get_velocity(coord_previous, coord_now, duration)
         return v_y
 
     def compute_angle2gate(self, events, idx):
@@ -406,10 +447,10 @@ class Preprocess:
         return wrong_files
 
 
-if __name__ == '__main__':
-    hockey_data_dir = '/Users/liu/Desktop/Ice-hokcey-data-sample/data-sample/'
-    # hockey_data_dir = '/cs/oschulte/2019-icehockey-data/2018-2019/'
-    save_data_dir = '/cs/oschulte/Galen/Ice-hockey-data/2018-2019'
-    prep = Preprocess(hockey_data_dir=hockey_data_dir, save_data_dir=save_data_dir)
-    scaler = prep.scale_allgame_features()
-    prep.process_all(scaler)
+# if __name__ == '__main__':
+#     hockey_data_dir = '/Users/liu/Desktop/Ice-hokcey-data-sample/data-sample/'
+#     # hockey_data_dir = '/cs/oschulte/2019-icehockey-data/2018-2019/'
+#     save_data_dir = '/cs/oschulte/Galen/Ice-hockey-data/2018-2019'
+#     prep = Preprocess(hockey_data_dir=hockey_data_dir, save_data_dir=save_data_dir)
+#     scaler = prep.scale_allgame_features()
+#     prep.process_all(scaler)
