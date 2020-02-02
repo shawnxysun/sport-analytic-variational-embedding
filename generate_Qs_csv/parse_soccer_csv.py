@@ -122,11 +122,10 @@ if __name__ == '__main__':
     # number of state features: 18 = 16 + 2, last 2 are home and away
     # number of actions: 43
     # in total: 2 + (18 + 43) * 10 = impact + Q + 610
-    # action standard_shot0 index = -20 + (-2), last 2 are home and away
+    
+    Q_data_DIR = '/Users/xiangyusun/Development/LMUT/csv_files/soccer/'
 
-    Q_data_DIR = '/Users/xiangyusun/Desktop/soccer_data_from_galen/'
-
-    file_name = Q_data_DIR + 'shot_impact_Q_states_features_history_soccer.csv'
+    file_name = Q_data_DIR + '/csv_from_galen/shot_impact_Q_states_features_history_soccer.csv'
     
     Q_file_name = 'Q_standard_shot_soccer.csv'
     impact_file_name = 'impact_standard_shot_soccer.csv'
@@ -134,6 +133,7 @@ if __name__ == '__main__':
     Q_file_Writer = open(Q_data_DIR + '/' + Q_file_name, 'w')
     impact_file_Writer = open(Q_data_DIR + '/' + impact_file_name, 'w')
 
+    # action standard_shot0 index = -20 + (-2), last 2 are home and away
     standard_shot_index = -22
 
     read_csv(file_name, Q_file_Writer, impact_file_Writer, standard_shot_index)
