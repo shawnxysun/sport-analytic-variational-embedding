@@ -86,8 +86,9 @@ def read_csv(csvfile, Q_file_Writer, impact_file_Writer, standard_shot_index):
 
                     # no action for event0
                     if event_count == 0:
-                        impact_file_Writer.write(make_csv_str(state_features))
-                        Q_file_Writer.write(make_csv_str(state_features))
+                        # use [:-1] because we do not want the last comma 
+                        impact_file_Writer.write(make_csv_str(state_features)[:-1])
+                        Q_file_Writer.write(make_csv_str(state_features)[:-1])
                     else:
                         impact_file_Writer.write(make_csv_str(state_features) + make_csv_str(actions))
                         Q_file_Writer.write(make_csv_str(state_features) + make_csv_str(actions))
@@ -106,8 +107,9 @@ def read_csv(csvfile, Q_file_Writer, impact_file_Writer, standard_shot_index):
 
                         # no action for event0
                         if event_count == 0:
-                            impact_file_Writer.write(make_csv_str(state_features))
-                            Q_file_Writer.write(make_csv_str(state_features))
+                            # use [:-1] because we do not want the last comma 
+                            impact_file_Writer.write(make_csv_str(state_features)[:-1])
+                            Q_file_Writer.write(make_csv_str(state_features)[:-1])
                         else:
                             impact_file_Writer.write(make_csv_str(state_features) + make_csv_str(actions))
                             Q_file_Writer.write(make_csv_str(state_features) + make_csv_str(actions))
