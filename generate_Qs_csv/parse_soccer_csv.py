@@ -1,5 +1,4 @@
 import datetime
-import tensorflow as tf
 import os
 import scipy.io as sio
 import numpy as np
@@ -125,20 +124,28 @@ if __name__ == '__main__':
     # number of actions: 43
     # in total: 2 + (18 + 43) * 10 = impact + Q + 610
     
-    Q_data_DIR = '/Users/xiangyusun/Development/LMUT/csv_files/soccer/'
+    Q_data_DIR = '/Users/shawnxys/Development/LMUT/csv_files/soccer/'
 
-    file_name = Q_data_DIR + '/csv_from_galen/shot_impact_Q_states_features_history_soccer.csv'
-    
-    Q_file_name = 'Q_standard_shot_soccer.csv'
-    impact_file_name = 'impact_standard_shot_soccer.csv'
+    # csv_name = 'shot_impact_Q_states_features_history_soccer'
+    # Q_file_name = 'Q_standard_shot_soccer.csv'
+    # impact_file_name = 'impact_standard_shot_soccer.csv'
+
+    # action standard_shot0 index = -20 + (-2), last 2 are home and away
+    # action_index = -22
+
+    csv_name = 'pass_impact_Q_states_features_history_soccer' 
+    Q_file_name = 'Q_simple_pass_soccer.csv'
+    impact_file_name = 'impact_simple_pass_soccer.csv'
+
+    # action simple_pass0 index = -33 + (-2), last 2 are home and away
+    action_index = -35
+
+    file_name = Q_data_DIR + '/csv_from_galen/' + csv_name + '.csv'
 
     Q_file_Writer = open(Q_data_DIR + '/' + Q_file_name, 'w')
     impact_file_Writer = open(Q_data_DIR + '/' + impact_file_name, 'w')
 
-    # action standard_shot0 index = -20 + (-2), last 2 are home and away
-    standard_shot_index = -22
-
-    read_csv(file_name, Q_file_Writer, impact_file_Writer, standard_shot_index)
+    read_csv(file_name, Q_file_Writer, impact_file_Writer, action_index)
 
     Q_file_Writer.close()
     impact_file_Writer.close()

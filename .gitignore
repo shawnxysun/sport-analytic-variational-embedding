@@ -97,3 +97,5 @@ ENV/
 
 #nonhup output
 *.out
+
+*.DS_Store
