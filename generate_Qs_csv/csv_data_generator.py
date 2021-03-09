@@ -1,5 +1,5 @@
 import datetime
-import tensorflow as tf
+import tensorflow as tf  # pip install tensorflow==1.15, the 2.0 version by default does not work
 import os
 import scipy.io as sio
 import numpy as np
@@ -7,6 +7,7 @@ import copy
 import random
 
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)) + "/..")
 
 from nn_structure.cvrnn import CVRNN
@@ -24,13 +25,13 @@ ACTION_TO_MIMIC = 'shot'
 
 trained_model_name = 'Ice-Hockey-game--10501'
 
-save_mother_dir = "/cs/oschulte/xiangyus/DRL-ice-hockey-saves"
-# save_mother_dir = "/Users/xiangyusun/Desktop"
+# save_mother_dir = "/cs/oschulte/xiangyus/DRL-ice-hockey-saves"
+save_mother_dir = "/Users/shawnxys/Desktop"
 
-DATA_STORE = "/cs/oschulte/xiangyus/2019-icehockey-data-preprocessed/2018-2019"
-# DATA_STORE = "/Users/xiangyusun/Desktop/2019-icehockey-data-preprocessed/2018-2019"
+# DATA_STORE = "/cs/oschulte/xiangyus/2019-icehockey-data-preprocessed/2018-2019"
+DATA_STORE = "/Users/shawnxys/Development/Data/2019-icehockey-data-preprocessed/2018-2019"
 
-SAVED_NETWORK = save_mother_dir + '/models/'
+SAVED_NETWORK = './models/'
 
 directory_generated_Q_data = "Q_data"
 
@@ -44,14 +45,16 @@ impact_file_name = 'impact_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 
 # 146231 is the total number of Q data for action shot, we want to generate half as many artificial data as the real data for an action (shot). We will stop generating new artificial data when half as many is researched. Accroding to Galen's paper, there are 3M events in total (use 4M here). 
 total_number_of_artificial_Q = 146231.0 / 2.0
-chance_to_simulate =  total_number_of_artificial_Q / 4000000.0
+chance_to_simulate = total_number_of_artificial_Q / 4000000.0
 number_of_artificial_Q_generated = 0
 artificial_Q_file_name = 'artificial_Q_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 artificial_impact_file_name = 'artificial_impact_' + ACTION_TO_MIMIC + '_' + str(timestamp) + '.csv'
 
+
 def get_action_index_in_feature(action_index):
     # the first 12 elements are state features
     return 12 + action_index
+
 
 # convert s2, s1, s0(current), padding, padding, ...
 # to padding, padding, ..., s2, s1, s0(current)
@@ -67,8 +70,9 @@ def convert_to_padding_front(padding_end_state):
             padding_front_state.insert(0, event)
         else:
             padding_front_state.append(event)
-    
+
     return padding_front_state
+
 
 # convert padding, padding, ..., s2, s1, s0(current)
 # back to s2, s1, s0(current), padding, padding, ...
@@ -87,20 +91,21 @@ def convert_back_to_padding_end(padding_front_state):
         else:
             # padding_front_state.append(event)
             padding_end_state.append(event)
-    
+
     padding_end_state = padding_end_state + paddings
     return padding_end_state
+
 
 def make_csv_data_line(state_features, state_index):
     # flat the state features of all histories
     state_feature_str = ''
     for history_index in range(0, len(state_features[state_index])):
-    # for history_index in range(0, 1): # only consider the curent state
+        # for history_index in range(0, 1): # only consider the curent state
         for feature_index in range(0, len(state_features[state_index][history_index])):
             # ignore actions of current state, since we only generate data for 1 action
             if history_index == 9 and feature_index >= 12:
                 continue
-            
+
             state_feature_value = state_features[state_index][history_index][feature_index]
 
             # action is no longer normalized
@@ -112,20 +117,22 @@ def make_csv_data_line(state_features, state_index):
             #         state_feature_value = 0
 
             state_feature_str = state_feature_str + str(state_feature_value).strip() + ','
-    
+
     return state_feature_str
 
-def write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer, Q_values, impacts, padding_front_states, action_index_in_feature, trace_lengths, model, session):
+
+def write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer,
+                     Q_values, impacts, padding_front_states, action_index_in_feature, trace_lengths, model, session):
     # Q values, trace lengths, and states are created in the same order, so 'state_index' works for all of them
     for state_index in range(0, len(Q_values)):
 
         # generate the data only if the action of the current event is what we want
         # current event is index 9
         if padding_front_states[state_index][9][action_index_in_feature] > 0:
-            
-            Q_value = str(Q_values[state_index][0]).strip() # only the Q_home for now, [0]
+
+            Q_value = str(Q_values[state_index][0]).strip()  # only the Q_home for now, [0]
             state_feature_str = make_csv_data_line(padding_front_states, state_index)
-            
+
             # write a line [Q, state_features_history_1, state_features_history_2, one_hot_action_history_2, ..., state_features_history_10, one_hot_action_history_10]
             # [:-1] to remove last comma
             if Q_file_Writer is not None:
@@ -134,7 +141,7 @@ def write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer
             # impacts for home team
             if impact_file_Writer is not None:
                 if impacts[state_index] is not None:
-                    impact = str(impacts[state_index][0]).strip() # only the home impact, [0]
+                    impact = str(impacts[state_index][0]).strip()  # only the home impact, [0]
                     impact_file_Writer.write(impact.strip() + ',' + (state_feature_str.strip()[:-1]) + '\n')
 
         # generate artificial data
@@ -148,7 +155,7 @@ def write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer
                 # generate artificial data by chance 
                 randomValue = random.random()
                 if randomValue <= chance_to_simulate:
-                
+
                     padding_end_state = convert_back_to_padding_end(padding_front_states[state_index])
 
                     # make a copy of the original state so we do not modify the original data 
@@ -165,29 +172,36 @@ def write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer
                         if artificial_index >= 12:
                             # set all action_bits to 0
                             artificial_padding_end_current_event[artificial_index] = 0
-                    
+
                     # set artificial action to 1
                     artificial_padding_end_current_event[action_index_in_feature] = 1
 
-                    [artificial_Q_values] = session.run([model.read_out], feed_dict={model.rnn_input_ph: [artificial_padding_end_state], model.trace_lengths_ph: [trace_lengths[state_index]]})
+                    [artificial_Q_values] = session.run([model.read_out],
+                                                        feed_dict={model.rnn_input_ph: [artificial_padding_end_state],
+                                                                   model.trace_lengths_ph: [
+                                                                       trace_lengths[state_index]]})
 
-                    artificial_Q_value = str(artificial_Q_values[0][0]).strip() # only the Q_home for now, [0]
+                    artificial_Q_value = str(artificial_Q_values[0][0]).strip()  # only the Q_home for now, [0]
 
                     # only consider artificial impact for home team 
                     if artificial_impact_file_Writer is not None:
                         if padding_front_states[state_index][-1][9] > 0:
-                            artificial_impact_home = artificial_Q_values[0][0] - Q_values[state_index-1][0]
-                            artificial_impact_file_Writer.write(str(artificial_impact_home).strip() + ',' + (state_feature_str.strip()[:-1]) + '\n')
+                            artificial_impact_home = artificial_Q_values[0][0] - Q_values[state_index - 1][0]
+                            artificial_impact_file_Writer.write(
+                                str(artificial_impact_home).strip() + ',' + (state_feature_str.strip()[:-1]) + '\n')
 
                     if artificial_Q_file_Writer is not None:
-                        artificial_Q_file_Writer.write(artificial_Q_value.strip() + ',' + (state_feature_str.strip()[:-1]) + '\n')
+                        artificial_Q_file_Writer.write(
+                            artificial_Q_value.strip() + ',' + (state_feature_str.strip()[:-1]) + '\n')
 
                     number_of_artificial_Q_generated = number_of_artificial_Q_generated + 1
 
     if artificial_Q_file_Writer is not None or artificial_impact_file_Writer is not None:
         print("\n number_of_artificial_Q_generated: " + str(number_of_artificial_Q_generated))
 
-def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer, action_index):
+
+def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer,
+             action_index):
     # loading network
     saver = tf.train.Saver()
     sess.run(tf.global_variables_initializer())
@@ -223,7 +237,7 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_W
         if reward_name is None or state_input_name is None or action_input_name is None or state_trace_length_name is None:
             print("\n skip folder " + str(dir_game) + ' because of missing files')
             continue
-        
+
         reward = sio.loadmat(DATA_STORE + "/" + dir_game + "/" + reward_name)
         reward = reward['reward'][0]
 
@@ -238,8 +252,9 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_W
 
         print("\n loaded files in folder " + str(dir_game) + " successfully")
 
-        if len(state_input) != len(reward) or len(action_input) != len(reward) or len(state_trace_length) != len(reward):
-                raise Exception('state/action length does not equal to reward length')
+        if len(state_input) != len(reward) or len(action_input) != len(reward) or len(state_trace_length) != len(
+                reward):
+            raise Exception('state/action length does not equal to reward length')
 
         train_len = len(state_input)
         train_number = 0
@@ -256,7 +271,9 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_W
 
         while True:
             batch_return, train_number, s_tl = get_together_training_batch(s_t0,
-            state_input,action_input,reward,train_number,train_len,state_trace_length,BATCH_SIZE)
+                                                                           state_input, action_input, reward,
+                                                                           train_number, train_len, state_trace_length,
+                                                                           BATCH_SIZE)
 
             # get the batch variables
             s_t0_batch = [d[0] for d in batch_return]
@@ -266,7 +283,8 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_W
 
             # calculate Q values 
             # home Q values for both home taking possession and away taking possession
-            [Q_values] = sess.run([model.read_out], feed_dict={model.rnn_input_ph: s_t0_batch, model.trace_lengths_ph: trace_t0_batch})
+            [Q_values] = sess.run([model.read_out],
+                                  feed_dict={model.rnn_input_ph: s_t0_batch, model.trace_lengths_ph: trace_t0_batch})
             Q_values_game.extend(Q_values)
             trace_t0_game.extend(trace_t0_batch)
 
@@ -279,36 +297,43 @@ def generate(sess, model, Q_file_Writer, impact_file_Writer, artificial_Q_file_W
 
             if terminal:
                 break
-        
+
         # after a whole game 
         # calculate impact for home team 
-        impacts_game.append(None) # placeholder for the first state
+        impacts_game.append(None)  # placeholder for the first state
         for i in range(1, len(Q_values_game)):
             # home team, value is normalized
             if padding_front_states_game[i][-1][9] > 0:
-                impact_home = Q_values_game[i] - Q_values_game[i-1]
+                impact_home = Q_values_game[i] - Q_values_game[i - 1]
             # away team, value is normalized
             elif padding_front_states_game[i][-1][10] > 0:
-                impact_home = None # ignore away team for now
+                impact_home = None  # ignore away team for now
             else:
                 raise ValueError('home or away??? must be one of them.')
 
             impacts_game.append(impact_home)
 
         # write data for a whole game 
-        write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer, Q_values_game, impacts_game, padding_front_states_game, action_index_in_feature, trace_t0_game, model, sess)
+        write_Q_data_txt(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer,
+                         Q_values_game, impacts_game, padding_front_states_game, action_index_in_feature, trace_t0_game,
+                         model, sess)
 
-def generation_start(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer, action_index):
+
+def generation_start(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer,
+                     action_index):
     sess_nn = tf.InteractiveSession()
 
     # define model 
-    icehockey_config_path = os.path.dirname(os.path.realpath(__file__)) + "/../environment_settings/ice_hockey_predict_Qs_lstm.yaml"
+    icehockey_config_path = os.path.dirname(
+        os.path.realpath(__file__)) + "/../environment_settings/ice_hockey_predict_Qs_lstm.yaml"
     icehockey_model_config = LSTMQsCongfig.load(icehockey_config_path)
     model_nn = TD_Prediction(config=icehockey_model_config)
     model_nn()
     sess_nn.run(tf.global_variables_initializer())
 
-    generate(sess_nn, model_nn, Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer, action_index)
+    generate(sess_nn, model_nn, Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer,
+             artificial_impact_file_Writer, action_index)
+
 
 # value_type==1: Q
 # value_type==2: impact
@@ -326,7 +351,7 @@ def generete_csv_header(file_Writer, value_type):
         elif line == 1:
             # Q_file_Writer.write('NA\n')
             pass
-        elif line ==2:
+        elif line == 2:
             # Q_file_Writer.write('1\n')
             pass
         elif line == 3:
@@ -373,8 +398,8 @@ def generete_csv_header(file_Writer, value_type):
 
         elif line == 15 or (line - 3 - 1) % 39 == 11:
             header_str = header_str + 'angle2gate' + str(history_count) + ','
-            
-        else: # actions
+
+        else:  # actions
             index = (line - 3 - 1) % 39 - 12
             action = action_all[index]
             header_str = header_str + action + str(history_count) + ','
@@ -382,6 +407,7 @@ def generete_csv_header(file_Writer, value_type):
     # [:-1] to remove last comma
     header_str = header_str[:-1]
     file_Writer.write(header_str + '\n')
+
 
 if __name__ == '__main__':
     if not os.path.isdir(Q_data_DIR):
@@ -400,21 +426,22 @@ if __name__ == '__main__':
     artificial_impact_file_Writer = open(Q_data_DIR + '/' + artificial_impact_file_name, 'w')
 
     if Q_file_Writer is not None:
-        generete_csv_header(Q_file_Writer, 1) # value_type==1: Q
+        generete_csv_header(Q_file_Writer, 1)  # value_type==1: Q
 
     if impact_file_Writer is not None:
-        generete_csv_header(impact_file_Writer, 2) # value_type==2: impact
+        generete_csv_header(impact_file_Writer, 2)  # value_type==2: impact
 
     if artificial_Q_file_Writer is not None:
-        generete_csv_header(artificial_Q_file_Writer, 1) # value_type==1: Q
+        generete_csv_header(artificial_Q_file_Writer, 1)  # value_type==1: Q
 
     if artificial_impact_file_Writer is not None:
-        generete_csv_header(artificial_impact_file_Writer, 2) # value_type==2: impact
+        generete_csv_header(artificial_impact_file_Writer, 2)  # value_type==2: impact
 
     # the generated Q data file only contains data which has action 'ACTION_TO_MIMIC'
     action_index = action_all.index(ACTION_TO_MIMIC)
-    
-    generation_start(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer, action_index)
+
+    generation_start(Q_file_Writer, impact_file_Writer, artificial_Q_file_Writer, artificial_impact_file_Writer,
+                     action_index)
 
     if Q_file_Writer is not None:
         Q_file_Writer.close()
