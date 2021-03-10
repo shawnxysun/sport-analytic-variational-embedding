@@ -24,11 +24,11 @@ from configuration import MODEL_TYPE, MAX_TRACE_LENGTH, FEATURE_NUMBER, BATCH_SI
 
 trained_model_name = 'Ice-Hockey-game--10501'
 
-# save_mother_dir = "/cs/oschulte/xiangyus/DRL-ice-hockey-saves"
-save_mother_dir = "/Users/shawnxys/Desktop"
+save_mother_dir = "/cs/oschulte/xiangyus/DRL-ice-hockey-saves"
+# save_mother_dir = "/Users/shawnxys/Desktop"
 
-# DATA_STORE = "/cs/oschulte/xiangyus/2019-icehockey-data-preprocessed/2018-2019"
-DATA_STORE = "/Users/shawnxys/Development/Data/2019-icehockey-data-preprocessed/2018-2019"
+DATA_STORE = "/cs/oschulte/xiangyus/2019-icehockey-data-preprocessed/2018-2019"
+# DATA_STORE = "/Users/shawnxys/Development/Data/2019-icehockey-data-preprocessed/2018-2019"
 
 SAVED_NETWORK = './models/'
 
