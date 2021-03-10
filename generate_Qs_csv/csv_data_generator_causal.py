@@ -5,6 +5,7 @@ import scipy.io as sio
 import numpy as np
 import copy
 import random
+import pandas as pd
 
 import sys
 
@@ -39,6 +40,36 @@ DIR_GAMES_ALL = os.listdir(DATA_STORE)
 
 timestamp = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
 Q_file_name = 'Q_' + str(timestamp) + '.csv'
+
+# full_dataframe = pd.DataFrame(columns=[])
+headers_full = None
+
+# actions to drop
+actions_to_drop = ['assist',
+                   'block',
+                   'carry',
+                   'check',
+                   'controlledbreakout',
+                   'controlledentryagainst',
+                   'dumpin',
+                   'dumpinagainst',
+                   'dumpout',
+                   'faceoff',
+                   'icing',
+                   'lpr',
+                   'offside',
+                   'pass',
+                   'pass1timer',
+                   'penalty',
+                   'pressure',
+                   'pscarry',
+                   'pscheck',
+                   'pslpr',
+                   'pspuckprotection',
+                   'puckprotection',
+                   'reception',
+                   'receptionprevention',
+                   'shot1timer']
 
 
 def get_action_index_in_feature(action_index):
@@ -92,15 +123,11 @@ def make_csv_data_line(state_features, state_index):
     for history_index in range(0, len(state_features[state_index])):
         # for history_index in range(0, 1): # only consider the curent state
         for feature_index in range(0, len(state_features[state_index][history_index])):
-            # ignore actions of current state, since we only generate data for 1 action
-            if history_index == 9 and feature_index >= 12:
-                continue
-
             state_feature_value = state_features[state_index][history_index][feature_index]
 
             # action is no longer normalized
             # # check if it is action and change action to one-hot
-            # if feature_index >= 12: 
+            # if feature_index >= 12:
             #     if state_features[state_index][history_index][feature_index] > 0:
             #         state_feature_value = 1
             #     else:
@@ -111,24 +138,73 @@ def make_csv_data_line(state_features, state_index):
     return state_feature_str
 
 
-def write_Q_data_txt(Q_file_Writer, Q_values, padding_front_states):
+def drop_dataframe_columns(full_dataframe):
+    """
+    drop columns that we don't need
+    """
+
+    # columns from time step -9 to -2
+    columns_to_drop_1 = [c for c in full_dataframe.columns if c != 'Q' and c[-1] != '1' and c[-1] != '0']
+
+    # actions that we do not care
+    # ([:-3] to exclude '_-1' or '_-0')
+    columns_to_drop_2 = [c for c in full_dataframe.columns if c != 'Q' and c[:-3] in actions_to_drop]
+
+    # remove duplicate values
+    columns_to_drop = list(set(columns_to_drop_1 + columns_to_drop_2))
+
+    # drop these columns
+    new_dataframe = full_dataframe.drop(columns=columns_to_drop)
+
+    return new_dataframe
+
+
+def write_Q_data_txt(Q_values, padding_front_states):
+    data = []
+
     # Q values, trace lengths, and states are created in the same order, so 'state_index' works for all of them
     for state_index in range(0, len(Q_values)):
-
-        # generate the data only if the action of the current event is what we want
-        # current event is index 9
-        # if padding_front_states[state_index][9][action_index_in_feature] > 0:
-
-        Q_value = str(Q_values[state_index][0]).strip()  # only the Q_home for now, [0]
         state_feature_str = make_csv_data_line(padding_front_states, state_index)
 
-        # write a line [Q, state_features_history_1, state_features_history_2, one_hot_action_history_2, ..., state_features_history_10, one_hot_action_history_10]
+        # this is a line [Q, state_features_history_1, state_features_history_2, one_hot_action_history_2, ..., state_features_history_10, one_hot_action_history_10]
         # [:-1] to remove last comma
-        if Q_file_Writer is not None:
-            Q_file_Writer.write(Q_value.strip() + ',' + (state_feature_str.strip()[:-1]) + '\n')
+        # use "xxx" to replace Q for now, will assign the real Q values later
+        data.append(('xxx,' + (state_feature_str.strip()[:-1])).split(','))
+
+    # the full dataframe with all the rows and columns
+    full_dataframe = pd.DataFrame(data, columns=headers_full)
+
+    # for each row, assign the real Q value to replace "xxx"
+    for i in range(len(full_dataframe)):
+        Q_value_home = str(Q_values[i][0]).strip()
+        Q_value_away = str(Q_values[i][1]).strip()
+
+        home_0 = float(full_dataframe.iloc[i]['home_-0'])
+        away_0 = float(full_dataframe.iloc[i]['away_-0'])
+
+        # if home team takes possession, assign Q_home to Q
+        # if away team takes possession, assign Q_away to Q
+        if home_0 > 0 and away_0 < 0:
+            full_dataframe.iloc[i]['Q'] = Q_value_home
+        elif home_0 < 0 and away_0 > 0:
+            full_dataframe.iloc[i]['Q'] = Q_value_away
+        else:
+            raise Exception('what???')
+
+    new_dataframe = drop_dataframe_columns(full_dataframe)
+
+    # if "-1" step is paddings, drop the row
+    padding_row_index = new_dataframe[
+        (pd.to_numeric(new_dataframe['home_-1']) == 0) & (pd.to_numeric(new_dataframe['away_-1']) == 0)].index
+    new_dataframe = new_dataframe.drop(padding_row_index)
+
+    # append to exisiting csv
+    # Don't write out the column names (header)
+    # Don't write row names (index).
+    new_dataframe.to_csv(Q_file_directiry, mode='a', header=False, index=False)
 
 
-def generate(sess, model, Q_file_Writer):
+def generate(sess, model):
     # loading network
     saver = tf.train.Saver()
     sess.run(tf.global_variables_initializer())
@@ -189,8 +265,6 @@ def generate(sess, model, Q_file_Writer):
         s_t0 = np.concatenate((state_input[train_number], action_input[train_number]), axis=1)
         train_number += 1
 
-        # action_index_in_feature = get_action_index_in_feature(action_index)
-
         Q_values_game = []
         padding_front_states_game = []
         # impacts_game = []
@@ -208,8 +282,7 @@ def generate(sess, model, Q_file_Writer):
 
             terminal = batch_return[len(batch_return) - 1][5]
 
-            # calculate Q values 
-            # home Q values for both home taking possession and away taking possession
+            # calculate Q values
             [Q_values] = sess.run([model.read_out],
                                   feed_dict={model.rnn_input_ph: s_t0_batch, model.trace_lengths_ph: trace_t0_batch})
             Q_values_game.extend(Q_values)
@@ -226,10 +299,10 @@ def generate(sess, model, Q_file_Writer):
                 break
 
         # write data for a whole game 
-        write_Q_data_txt(Q_file_Writer, Q_values_game, padding_front_states_game)
+        write_Q_data_txt(Q_values_game, padding_front_states_game)
 
 
-def generation_start(Q_file_Writer):
+def generation_start():
     sess_nn = tf.InteractiveSession()
 
     # define model 
@@ -240,19 +313,17 @@ def generation_start(Q_file_Writer):
     model_nn()
     sess_nn.run(tf.global_variables_initializer())
 
-    generate(sess_nn, model_nn, Q_file_Writer)
+    generate(sess_nn, model_nn)
 
 
 # value_type==1: Q
 # value_type==2: impact
-def generete_csv_header(file_Writer, value_type):
+def generete_csv_header():
     # 3: data file name, NA, which line to start with
-    # 1: Q
-    # (12 + 27) * 9: (state features + one hot action) * 9 history events
-    # 12: the state features of 1st event, ignore actions
+    # (12 + 27) * 10: (state features + one hot action) * 10 history events
     header_str = ''
     history_count = 10
-    for line in range(0, 3 + 1 + (12 + 27) * 9 + 12):
+    for line in range(0, 3 + 1 + (12 + 27) * 10):
         if line == 0:
             # Q_file_Writer.write(Q_file_name + '\n')
             pass
@@ -263,73 +334,73 @@ def generete_csv_header(file_Writer, value_type):
             # Q_file_Writer.write('1\n')
             pass
         elif line == 3:
-            if value_type == 1:
-                header_str = header_str + 'Q,'
-            elif value_type == 2:
-                header_str = header_str + 'impact,'
-            else:
-                raise ValueError('Q or impact??? must be one of them.')
+            header_str = header_str + 'Q,'
 
         elif line == 4 or (line - 3 - 1) % 39 == 0:
             history_count = history_count - 1
-            header_str = header_str + 'xAdjCoord' + str(history_count) + ','
+            header_str = header_str + 'xAdjCoord_-' + str(history_count) + ','
 
         elif line == 5 or (line - 3 - 1) % 39 == 1:
-            header_str = header_str + 'yAdjCoord' + str(history_count) + ','
+            header_str = header_str + 'yAdjCoord_-' + str(history_count) + ','
 
         elif line == 6 or (line - 3 - 1) % 39 == 2:
-            header_str = header_str + 'scoreDifferential' + str(history_count) + ','
+            header_str = header_str + 'scoreDifferential_-' + str(history_count) + ','
 
         elif line == 7 or (line - 3 - 1) % 39 == 3:
-            header_str = header_str + 'manpowerSituation' + str(history_count) + ','
+            header_str = header_str + 'manpowerSituation_-' + str(history_count) + ','
 
         elif line == 8 or (line - 3 - 1) % 39 == 4:
-            header_str = header_str + 'outcome' + str(history_count) + ','
+            header_str = header_str + 'outcome_-' + str(history_count) + ','
 
         elif line == 9 or (line - 3 - 1) % 39 == 5:
-            header_str = header_str + 'velocity_x' + str(history_count) + ','
+            header_str = header_str + 'velocity_x_-' + str(history_count) + ','
 
         elif line == 10 or (line - 3 - 1) % 39 == 6:
-            header_str = header_str + 'velocity_y' + str(history_count) + ','
+            header_str = header_str + 'velocity_y_-' + str(history_count) + ','
 
         elif line == 11 or (line - 3 - 1) % 39 == 7:
-            header_str = header_str + 'time_remain' + str(history_count) + ','
+            header_str = header_str + 'time_remain_-' + str(history_count) + ','
 
         elif line == 12 or (line - 3 - 1) % 39 == 8:
-            header_str = header_str + 'duration' + str(history_count) + ','
+            header_str = header_str + 'duration_-' + str(history_count) + ','
 
         elif line == 13 or (line - 3 - 1) % 39 == 9:
-            header_str = header_str + 'home' + str(history_count) + ','
+            header_str = header_str + 'home_-' + str(history_count) + ','
 
         elif line == 14 or (line - 3 - 1) % 39 == 10:
-            header_str = header_str + 'away' + str(history_count) + ','
+            header_str = header_str + 'away_-' + str(history_count) + ','
 
         elif line == 15 or (line - 3 - 1) % 39 == 11:
-            header_str = header_str + 'angle2gate' + str(history_count) + ','
+            header_str = header_str + 'angle2gate_-' + str(history_count) + ','
 
         else:  # actions
             index = (line - 3 - 1) % 39 - 12
             action = action_all[index]
-            header_str = header_str + action + str(history_count) + ','
+            header_str = header_str + action + '_-' + str(history_count) + ','
 
     # [:-1] to remove last comma
     header_str = header_str[:-1]
-    file_Writer.write(header_str + '\n')
+
+    # all columns including columns that will be dropped later
+    return header_str.split(',')
 
 
 if __name__ == '__main__':
     if not os.path.isdir(Q_data_DIR):
         os.mkdir(Q_data_DIR)
 
-    Q_file_Writer = open(Q_data_DIR + '/' + Q_file_name, 'w')
+    Q_file_directiry = Q_data_DIR + '/' + Q_file_name
 
-    if Q_file_Writer is not None:
-        generete_csv_header(Q_file_Writer, 1)  # value_type==1: Q
+    headers_full = generete_csv_header()
 
-    # the generated Q data file only contains data which has action 'ACTION_TO_MIMIC'
-    # action_index = action_all.index(ACTION_TO_MIMIC)
+    # create a dataframe with column names only
+    full_dataframe = pd.DataFrame(columns=headers_full)
 
-    generation_start(Q_file_Writer)
+    # drop columns that we don't use
+    new_dataframe = drop_dataframe_columns(full_dataframe)
 
-    if Q_file_Writer is not None:
-        Q_file_Writer.close()
+    # Write out the column names (header)
+    # Don't write row names (index).
+    new_dataframe.to_csv(Q_file_directiry, header=True, index=False)
+
+    generation_start()
