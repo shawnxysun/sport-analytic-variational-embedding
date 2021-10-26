@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     cluster_name = 'ap'
     print(cluster_name)
-    
+
     PC = PlayerCluster(player_basic_info, player_scoring_stats, interest_features, cluster_name)
     PC.gather_cluster_data()
     PC.train_cluster()
